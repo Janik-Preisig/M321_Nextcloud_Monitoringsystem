@@ -1,311 +1,390 @@
-# Modul 321 MQTT Smart Home Monitoring
-
-## Projektbeschreibung
-
-Dieses Repository dokumentiert eine lauffähige Demonstration einer virtuellen Smart-Home Umgebung.
-
-Mehrere Bash-basierte Dummy-Sensoren senden jede Sekunde Zufallswerte an einen MQTT-Broker. Der Broker läuft mit Eclipse Mosquitto in Docker. Grafana empfängt die Daten über das MQTT-Plugin und visualisiert die Sensorwerte live in einem Dashboard.
+# Modul 321 - MQTT Smart Home Monitoring
 
 ## Personen
 
-Erstellt von: Fionn Lässer  
+Erstellt von: Fionn Laesser  
 Sparing-Partner: Janik Preisig
 
-## Ziel der Demo
+## Projektidee
 
-Gesucht ist eine funktionierende Smart-Home Umgebung mit:
+Dieses Projekt zeigt ein lauffähiges Smart-Home-Monitoring mit MQTT. Mehrere Bash-Sensoren und mehrere Java-Sensoren senden Messwerte an einen Mosquitto MQTT-Broker. Grafana ist über das MQTT Datasource Plugin mit dem Broker verbunden und zeigt die Daten in zwei getrennten Panels an.
 
-- mehreren Bash-Sensoren
-- MQTT-Broker mit Mosquitto
-- MQTT-Topics pro Sensor
-- Visualisierung in Grafana
-- Grafana MQTT Datasource Plugin
+Die Java-Sensoren haben zusätzlich eine Subscriber-Funktion. Über das Topic `java/commands` können die Befehle `status`, `pause`, `resume` und `stop` an alle Java-Sensoren gesendet werden.
 
 ## Systemübersicht
 
 ```text
-Bash-Sensoren -> Mosquitto MQTT-Broker -> Grafana MQTT Datasource -> Grafana Dashboard
+Bash-Sensoren
+  bash/r1
+  bash/r2
+  bash/r3
+        \
+         \-> Mosquitto MQTT-Broker -> Grafana MQTT Datasource -> Dashboard
+         /
+Java-Sensoren
+  java/r1
+  java/r2
+  java/r3
+
+Java-Subscriber:
+  java/commands -> status, pause, resume, stop
 ```
-
-## Komponenten
-
-- Debian oder Ubuntu Linux VM
-- Docker
-- Eclipse Mosquitto MQTT-Broker
-- mosquitto-clients
-- Grafana
-- Grafana MQTT Datasource Plugin
-- Bash-Skripte für Dummy-Sensoren
 
 ## Repository-Struktur
 
 ```text
-modul321-mqtt-smart-home-monitoring/
-├── README.md
-├── docker-compose.yml
-├── mosquitto/
-│   └── config/
-│       └── mosquitto.conf
-├── scripts/
-│   ├── sensor.sh
-│   ├── sensor1.sh
-│   ├── sensor2.sh
-│   ├── sensor3.sh
-│   └── start-all-sensors.sh
-├── screenshots/
-│   └── README.md
-└── docs/
-    └── abgabe-notizen.md
+.
++-- README.md
++-- docker-compose.yml
++-- mosquitto/
+|   +-- config/
+|       +-- mosquitto.conf
++-- bash-sensoren/
+|   +-- sensor.sh
+|   +-- wohnzimmer-temperatur.sh
+|   +-- bad-luftfeuchtigkeit.sh
+|   +-- flur-helligkeit.sh
+|   +-- start-all-sensors.sh
++-- java-sensoren/
+|   +-- pom.xml
+|   +-- start-java-sensoren.sh
+|   +-- src/
++-- screenshots/
+|   +-- README.md
++-- docs/
+    +-- abgabe-notizen.md
 ```
 
-## 1. Voraussetzungen prüfen
+## Voraussetzungen
 
-Docker prüfen:
+Benötigt werden:
+
+- Docker und Docker Compose
+- Bash
+- Java 21
+- Maven
+- optional lokal installierte Mosquitto-Clients (`mosquitto_pub`, `mosquitto_sub`)
+
+Prüfen:
 
 ```bash
 docker --version
 docker compose version
+java --version
+mvn --version
 ```
 
-Mosquitto Clients prüfen:
-
-```bash
-mosquitto_pub --help
-mosquitto_sub --help
-```
-
-Falls die Mosquitto Clients fehlen:
+Falls `mosquitto_pub` und `mosquitto_sub` lokal fehlen, können sie auf Debian/Ubuntu so installiert werden:
 
 ```bash
 sudo apt update
 sudo apt install -y mosquitto-clients
 ```
 
-## 2. Mosquitto MQTT-Broker starten
+Die Bash-Sensoren können alternativ `docker exec mosquitto mosquitto_pub` verwenden, wenn der Mosquitto-Container läuft.
 
-Den Broker mit Docker Compose starten:
+## MQTT und Grafana starten
+
+Im Projektordner:
 
 ```bash
 docker compose up -d
 ```
 
-Prüfen, ob der Container läuft:
+Prüfen:
 
 ```bash
 docker ps
-```
-
-Logs anzeigen:
-
-```bash
 docker logs mosquitto
+docker logs grafana
 ```
 
-## 3. MQTT-Broker testen
+Der MQTT-Broker stellt diese Ports bereit:
 
-Terminal 1 öffnen und auf das Topic `test` abonnieren:
+- `1883`: normales MQTT
+- `9001`: MQTT über WebSockets
 
-```bash
-mosquitto_sub -h localhost -p 1883 -t test
-```
-
-Terminal 2 öffnen und eine Nachricht senden:
-
-```bash
-mosquitto_pub -h localhost -p 1883 -t test -m "hello world"
-```
-
-Im ersten Terminal sollte jetzt erscheinen:
-
-```text
-hello world
-```
-
-## 4. Dummy-Sensoren starten
-
-Alle Sensordaten anzeigen:
-
-```bash
-mosquitto_sub -h localhost -p 1883 -t 'sensor/#' -v
-```
-
-Sensor 1 starten:
-
-```bash
-bash scripts/sensor1.sh
-```
-
-Sensor 2 starten:
-
-```bash
-bash scripts/sensor2.sh
-```
-
-Sensor 3 starten:
-
-```bash
-bash scripts/sensor3.sh
-```
-
-Alle Sensoren gleichzeitig starten:
-
-```bash
-bash scripts/start-all-sensors.sh
-```
-
-Die Sensoren senden jede Sekunde Zufallswerte an eigene Topics.
-
-## 5. MQTT Topics
-
-| Sensor | Topic | Wertebereich |
-| --- | --- | --- |
-| sensor1 | sensor/sensor1 | 18 bis 30 |
-| sensor2 | sensor/sensor2 | 30 bis 80 |
-| sensor3 | sensor/sensor3 | 0 bis 100 |
-
-## 6. Eigenen Sensor starten
-
-Das Skript `sensor.sh` ist parametrisierbar.
-
-Beispiel:
-
-```bash
-bash scripts/sensor.sh wohnzimmer-temp sensor/wohnzimmer/temp 18 30
-```
-
-Parameter:
-
-```text
-1. Sensorname
-2. MQTT-Topic
-3. Minimalwert
-4. Maximalwert
-```
-
-## 7. Grafana installieren
-
-Grafana starten:
-
-```bash
-sudo systemctl start grafana-server
-sudo systemctl enable grafana-server
-```
-
-Im Browser öffnen:
+Grafana ist danach im Browser erreichbar:
 
 ```text
 http://localhost:3000
 ```
 
-Standard-Login:
+Login:
 
 ```text
 Benutzername: admin
 Passwort: admin
 ```
 
-## 8. Grafana MQTT Plugin installieren
+Das Docker Compose Setup installiert beim Start von Grafana das Plugin `grafana-mqtt-datasource`.
 
-```bash
-sudo /usr/share/grafana/bin/grafana cli --homepath /usr/share/grafana plugins install grafana-mqtt-datasource
-sudo systemctl restart grafana-server
-```
+## Mosquitto-Konfiguration
 
-Prüfen:
-
-```bash
-sudo /usr/share/grafana/bin/grafana cli --homepath /usr/share/grafana plugins ls
-```
-
-Das Plugin sollte angezeigt werden:
+Die Datei `mosquitto/config/mosquitto.conf` aktiviert zwei Listener:
 
 ```text
-grafana-mqtt-datasource
+listener 1883 0.0.0.0
+protocol mqtt
+allow_anonymous true
+
+listener 9001 0.0.0.0
+protocol websockets
+allow_anonymous true
 ```
 
-## 9. MQTT Datasource in Grafana einrichten
+Für die lokale Demo ist anonyme Verbindung erlaubt. Das ist für den Unterricht einfach, wäre aber in einem echten Produktivsystem nicht sicher genug.
 
-In Grafana:
+## MQTT-Broker testen
+
+Terminal 1:
+
+```bash
+mosquitto_sub -h localhost -p 1883 -t test -v
+```
+
+Terminal 2:
+
+```bash
+mosquitto_pub -h localhost -p 1883 -t test -m "hello mqtt"
+```
+
+Im ersten Terminal muss diese Nachricht sichtbar werden:
+
+```text
+test hello mqtt
+```
+
+Wenn `mosquitto_sub` lokal nicht installiert ist, kann der Test auch im Container ausgeführt werden:
+
+```bash
+docker exec -it mosquitto mosquitto_sub -h localhost -p 1883 -t test -v
+docker exec mosquitto mosquitto_pub -h localhost -p 1883 -t test -m "hello mqtt"
+```
+
+## Bash-Sensoren
+
+Die Bash-Sensoren senden Zufallswerte auf drei unterschiedliche Topics:
+
+| Sensor | Topic | Werte |
+| --- | --- | --- |
+| `wohnzimmer-temperatur` | `bash/r1` | 18 bis 30 |
+| `bad-luftfeuchtigkeit` | `bash/r2` | 30 bis 80 |
+| `flur-helligkeit` | `bash/r3` | 0 bis 100 |
+
+Alle Bash-Sensoren starten:
+
+```bash
+bash bash-sensoren/start-all-sensors.sh
+```
+
+Einzelne Sensoren starten:
+
+```bash
+bash bash-sensoren/wohnzimmer-temperatur.sh
+bash bash-sensoren/bad-luftfeuchtigkeit.sh
+bash bash-sensoren/flur-helligkeit.sh
+```
+
+Alle Bash-Nachrichten anzeigen:
+
+```bash
+mosquitto_sub -h localhost -p 1883 -t 'bash/#' -v
+```
+
+Die Terminalausgabe der Sensoren zeigt jeweils Sensorname, Topic, Broker und Wert, zum Beispiel:
+
+```text
+[bash] Sensorname=wohnzimmer-temperatur Topic=bash/r1 Broker=localhost:1883 Wert=24
+```
+
+`start-all-sensors.sh` startet alle drei Sensoren im Hintergrund und stoppt sie sauber mit `Ctrl + C`.
+
+## Java-Sensoren
+
+Die Java-Anwendung startet drei virtuelle MQTT-Clients. Jeder Client published auf ein eigenes Topic und subscribed zusätzlich auf `java/commands`.
+
+| Sensor | Publish-Topic | Subscribe-Topic |
+| --- | --- | --- |
+| `java-wohnzimmer-temperatur` | `java/r1` | `java/commands` |
+| `java-küche-energie` | `java/r2` | `java/commands` |
+| `java-keller-luftqualität` | `java/r3` | `java/commands` |
+
+Java-Sensoren starten:
+
+```bash
+bash java-sensoren/start-java-sensoren.sh
+```
+
+Das Startskript führt zuerst `mvn package` aus, wenn das JAR fehlt oder der Quellcode neuer ist als das JAR. Danach startet es:
+
+```bash
+java -jar target/m321-sq3-1.0-SNAPSHOT-jar-with-dependencies.jar
+```
+
+Optional kann ein anderer Broker übergeben werden:
+
+```bash
+bash java-sensoren/start-java-sensoren.sh tcp://localhost:1883
+```
+
+Alle Java-Nachrichten anzeigen:
+
+```bash
+mosquitto_sub -h localhost -p 1883 -t 'java/#' -v
+```
+
+Die Terminalausgabe zeigt die Topics klar sichtbar, zum Beispiel:
+
+```text
+[java] Sensorname=java-wohnzimmer-temperatur Topic=java/r1 Broker=tcp://localhost:1883 Wert=21.00
+```
+
+## Java-Subscriber testen
+
+Alle Java-Sensoren subscribed auf:
+
+```text
+java/commands
+```
+
+Befehle senden:
+
+```bash
+mosquitto_pub -h localhost -p 1883 -t java/commands -m status
+mosquitto_pub -h localhost -p 1883 -t java/commands -m pause
+mosquitto_pub -h localhost -p 1883 -t java/commands -m resume
+mosquitto_pub -h localhost -p 1883 -t java/commands -m stop
+```
+
+Erwartetes Verhalten:
+
+| Befehl | Wirkung |
+| --- | --- |
+| `status` | Java-Terminal zeigt, ob Publishing aktiv ist. |
+| `pause` | Java-Sensoren bleiben verbunden, senden aber keine neuen Werte. |
+| `resume` | Java-Sensoren senden wieder Werte. |
+| `stop` | Java-Sensoren beenden sich sauber. |
+
+Beispielausgabe:
+
+```text
+[java] Sensorname=java-wohnzimmer-temperatur SubscribeTopic=java/commands Befehl=pause Aktion=Publishing pausiert
+```
+
+## Grafana Datasource
+
+Grafana läuft im Docker Compose Setup auf:
+
+```text
+http://localhost:3000
+```
+
+Datasource einrichten:
 
 ```text
 Connections
 Data sources
-Add data source
+Add new data source
 MQTT auswählen
 ```
 
-URI eintragen:
+Wenn Grafana aus diesem Docker Compose Setup verwendet wird:
 
 ```text
-tcp://localhost:1883
+URI: tcp://mosquitto:1883
 ```
 
-Dann:
+Wenn Grafana lokal auf dem Host installiert ist:
 
 ```text
-Save & test
+URI: tcp://localhost:1883
 ```
 
-## 10. Dashboard erstellen
+Falls die Datasource eine WebSocket-URL verlangt, kann der WebSocket-Listener verwendet werden:
 
-In Grafana:
+```text
+ws://localhost:9001
+```
+
+Danach `Save & test` ausführen. Die Datasource muss eine erfolgreiche Verbindung melden.
+
+## Grafana Dashboard
+
+Dashboard erstellen:
 
 ```text
 Dashboards
 New dashboard
 Add visualization
-MQTT Datasource auswählen
+Datasource: MQTT
 ```
 
-Topic eintragen:
+Panel 1 für Bash-Daten:
 
 ```text
-sensor/sensor1
+Panel title: Bash Sensoren
+Panel type: Time series / Timeline
+Datasource: MQTT
+Topics:
+  bash/r1
+  bash/r2
+  bash/r3
 ```
 
-Panel-Typ:
+Panel 2 für Java-Daten:
 
 ```text
-Time series
+Panel title: Java Sensoren
+Panel type: Time series / Timeline
+Datasource: MQTT
+Topics:
+  java/r1
+  java/r2
+  java/r3
 ```
 
-Für weitere Sensoren können zusätzliche Panels oder Queries erstellt werden:
+Das Dashboard muss am Ende zwei getrennte Panels zeigen: ein Panel für Bash-Daten und ein zweites Panel für Java-Daten.
 
-```text
-sensor/sensor2
-sensor/sensor3
-```
+## Demo-Ablauf
 
-## 11. Erwartetes Ergebnis
+1. Docker starten: `docker compose up -d`
+2. Container zeigen: `docker ps`
+3. MQTT-Test mit `test` Topic zeigen.
+4. MQTT-Monitor starten: `mosquitto_sub -h localhost -p 1883 -t '#' -v`
+5. Bash-Sensoren starten: `bash bash-sensoren/start-all-sensors.sh`
+6. Java-Sensoren starten: `bash java-sensoren/start-java-sensoren.sh`
+7. Java-Subscriber mit `status`, `pause`, `resume` und `stop` testen.
+8. Grafana Datasource zeigen.
+9. Grafana Dashboard mit Bash-Panel und Java-Panel zeigen.
 
-Grafana zeigt live Kurven mit den aktuellen Sensorwerten. Die Werte ändern sich jede Sekunde, weil die Bash-Sensoren fortlaufend Zufallszahlen an den MQTT-Broker senden.
+## Screenshots für die Abgabe
 
-## 12. Screenshots für die Abgabe
+Die Abgabe-Screenshots liegen im Ordner `screenshots/`. Eine lesbare Übersicht mit direkt eingebetteten Bildern steht in [screenshots/README.md](screenshots/README.md).
 
-## Übersicht
+| Datei | Was sichtbar sein muss |
+| --- | --- |
+| `docker-ps.png` | `docker ps` mit laufendem Mosquitto-Container und sichtbaren MQTT-Ports `1883` und `9001`. |
+| `mqtt-test.png` | Ein Terminal mit `mosquitto_sub` und ein erfolgreicher Publish/Subscribe-Test, zum Beispiel `test hello mqtt`. |
+| `bash-sensor-terminal.png` | `start-all-sensors.sh` läuft; die Ausgaben zeigen `bash/r1`, `bash/r2`, `bash/r3`, Sensorname, Broker und Wert. |
+| `java-sensor-terminal.png` | Java-Sensoren laufen; die Ausgaben zeigen `java/r1`, `java/r2`, `java/r3`, Broker und Wert. |
+| `java-subscriber-command.png` | Ein Command auf `java/commands` wurde gesendet; im Java-Terminal ist die Reaktion auf `status`, `pause`, `resume` oder `stop` sichtbar. |
+| `grafana-datasource.png` | Grafana MQTT Datasource mit URI `tcp://localhost:1883`. |
+| `grafana-panel-bash-settings.png` | Die Panel-Einstellungen für das Bash-Panel; sichtbar sind Paneltitel `Bash Sensoren`, Datasource `MQTT` und die Topics `bash/r1`, `bash/r2`, `bash/r3`. |
+| `grafana-panel-java-settings.png` | Die Panel-Einstellungen für das Java-Panel; sichtbar sind Paneltitel `Java Sensoren`, Datasource `MQTT` und die Topics `java/r1`, `java/r2`, `java/r3`. |
+| `grafana-dashboard-bash-java.png` | Das fertige Dashboard mit zwei Panels: Bash-Daten im ersten Panel und Java-Daten im zweiten Panel. |
 
-- **docker-ps**
+## Abgabe-Checkliste
 
-	![docker-ps](screenshots/docker-ps.png)
-
-- **MQTT Test**
-
-	![mqtt-test](screenshots/mqtt-test.png)
-
-- **Sensor Terminal**
-
-	![sensor-terminal](screenshots/sensor-terminal.png)
-
-- **Grafana Datasource**
-
-	![grafana-datasource](screenshots/grafana-datasource.png)
-
-- **Grafana Dashboard**
-
-	![grafana-dashboard](screenshots/grafana-dashboard.png)
-
-
-
-## 13. Fazit
-
-Die virtuelle Smart-Home Umgebung funktioniert. Mehrere Bash-Sensoren senden MQTT-Nachrichten an den Broker. Grafana empfängt diese Daten über das MQTT-Plugin und visualisiert sie live.
+- Docker Compose startet Mosquitto und Grafana.
+- Mosquitto ist über Port `1883` und WebSockets über Port `9001` erreichbar.
+- Grafana ist über Port `3000` erreichbar.
+- Das Grafana MQTT Datasource Plugin ist installiert.
+- Bash-Sensoren senden auf `bash/r1`, `bash/r2` und `bash/r3`.
+- Java-Sensoren senden auf `java/r1`, `java/r2` und `java/r3`.
+- Java-Sensoren subscribed auf `java/commands`.
+- Die Befehle `status`, `pause`, `resume` und `stop` funktionieren.
+- Grafana zeigt Bash-Daten in einem eigenen Timeline Panel.
+- Grafana zeigt Java-Daten in einem zweiten Timeline Panel.
+- Alle geforderten Screenshots liegen mit exakt korrekten Dateinamen in `screenshots/`.
+- Die Dokumentation ist als GitHub Repository oder als PDF abgabebereit.

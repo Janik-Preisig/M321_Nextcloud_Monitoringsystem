@@ -1,4 +1,11 @@
 .DS_Store
 *.log
 .env
+*.lck
 screenshots/*.tmp
+java-sensoren/target/
+java-sensoren/java-sinus-sensor-*/
+java-sensoren/java-*-tcplocalhost1883/
+.github/java-upgrade/
+java-sensoren/.github/java-upgrade/
+screenshots/183/
