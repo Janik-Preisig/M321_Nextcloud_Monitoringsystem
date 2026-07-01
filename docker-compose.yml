@@ -1,32 +1,172 @@
 services:
   mosquitto:
-    image: eclipse-mosquitto:latest
+    image: eclipse-mosquitto:2.0
     container_name: mosquitto
     restart: unless-stopped
     ports:
       - "1883:1883"
       - "9001:9001"
     volumes:
-      - ./mosquitto/config:/mosquitto/config
-      - mosquitto_data:/mosquitto/data
-      - mosquitto_log:/mosquitto/log
+      - ./mosquitto/config/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+      - mosquitto-data:/mosquitto/data
+      - mosquitto-log:/mosquitto/log
+    networks:
+      - m321-sensors
 
   grafana:
-    image: grafana/grafana:latest
+    image: grafana/grafana:11.5.2
     container_name: grafana
     restart: unless-stopped
-    depends_on:
-      - mosquitto
     ports:
-      - "3000:3000"
+      - "${GRAFANA_PORT:-3001}:3000"
     environment:
-      - GF_INSTALL_PLUGINS=grafana-mqtt-datasource
-      - GF_SECURITY_ADMIN_USER=admin
-      - GF_SECURITY_ADMIN_PASSWORD=admin
+      GF_INSTALL_PLUGINS: grafana-mqtt-datasource
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD}
     volumes:
-      - grafana_data:/var/lib/grafana
+      - grafana-data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+    networks:
+      - m321-sensors
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus
+    restart: unless-stopped
+    ports:
+      - "${PROMETHEUS_PORT:-9090}:9090"
+    command:
+      - --config.file=/etc/prometheus/prometheus.yaml
+      - --web.enable-lifecycle
+    volumes:
+      - ./prom_conf/prometheus.yaml:/etc/prometheus/prometheus.yaml:ro
+      - ./prom_conf/alerts.yaml:/etc/prometheus/alerts.yaml:ro
+      - prometheus-data:/prometheus
+    networks:
+      - m321-sensors
+
+  alertmanager:
+    image: prom/alertmanager:v0.27.0
+    container_name: alertmanager
+    restart: unless-stopped
+    ports:
+      - "${ALERTMANAGER_PORT:-9093}:9093"
+    command:
+      - --config.file=/etc/alertmanager/alertmanager.yaml
+    volumes:
+      - ./prom_conf/alertmanager.yaml:/etc/alertmanager/alertmanager.yaml:ro
+    networks:
+      - m321-sensors
+
+  # Bestehender Container-Exporter; kein zweiter cAdvisor wird angelegt.
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:v0.49.1
+    container_name: cadvisor
+    restart: unless-stopped
+    ports:
+      - "${CADVISOR_PORT:-18080}:8080"
+    privileged: true
+    devices:
+      - /dev/kmsg:/dev/kmsg
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker:/var/lib/docker:ro
+      - /dev/disk:/dev/disk:ro
+    networks:
+      - m321-sensors
+
+  node-exporter:
+    image: prom/node-exporter:v1.7.0
+    container_name: node-exporter
+    restart: unless-stopped
+    command:
+      - --path.rootfs=/host
+      - --collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)
+    pid: host
+    volumes:
+      - /:/host:ro,rslave
+    networks:
+      - m321-sensors
+
+  mariadb:
+    image: mariadb:11.8
+    container_name: nextcloud-mariadb
+    restart: unless-stopped
+    environment:
+      MARIADB_ROOT_PASSWORD: ${MARIADB_ROOT_PASSWORD}
+      MARIADB_DATABASE: ${MARIADB_DATABASE}
+      MARIADB_USER: ${MARIADB_USER}
+      MARIADB_PASSWORD: ${MARIADB_PASSWORD}
+      MARIADB_EXPORTER_PASSWORD: ${MARIADB_EXPORTER_PASSWORD}
+    command:
+      - --transaction-isolation=READ-COMMITTED
+      - --binlog-format=ROW
+    volumes:
+      - mariadb-data:/var/lib/mysql
+      - ./mariadb/init-exporter.sh:/docker-entrypoint-initdb.d/10-init-exporter.sh:ro
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    networks:
+      - m321-sensors
+
+  nextcloud:
+    image: nextcloud:33-apache
+    container_name: nextcloud
+    restart: unless-stopped
+    depends_on:
+      mariadb:
+        condition: service_healthy
+    ports:
+      - "${NEXTCLOUD_PORT:-8080}:80"
+    environment:
+      MYSQL_HOST: mariadb
+      MYSQL_DATABASE: ${MARIADB_DATABASE}
+      MYSQL_USER: ${MARIADB_USER}
+      MYSQL_PASSWORD: ${MARIADB_PASSWORD}
+      NEXTCLOUD_ADMIN_USER: ${NEXTCLOUD_ADMIN_USER}
+      NEXTCLOUD_ADMIN_PASSWORD: ${NEXTCLOUD_ADMIN_PASSWORD}
+      NEXTCLOUD_TRUSTED_DOMAINS: ${NEXTCLOUD_TRUSTED_DOMAINS:-localhost}
+    volumes:
+      - nextcloud-data:/var/www/html
+    healthcheck:
+      test: ["CMD-SHELL", "curl --fail --silent http://localhost/status.php >/dev/null || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 10
+      start_period: 90s
+    networks:
+      - m321-sensors
+
+  mariadb-exporter:
+    image: prom/mysqld-exporter:v0.17.2
+    container_name: mariadb-exporter
+    restart: unless-stopped
+    depends_on:
+      mariadb:
+        condition: service_healthy
+    command:
+      - --mysqld.address=mariadb:3306
+      - --mysqld.username=exporter
+    environment:
+      MYSQLD_EXPORTER_PASSWORD: ${MARIADB_EXPORTER_PASSWORD}
+    networks:
+      - m321-sensors
 
 volumes:
-  mosquitto_data:
-  mosquitto_log:
-  grafana_data:
+  mosquitto-data:
+  mosquitto-log:
+  grafana-data:
+  prometheus-data:
+  mariadb-data:
+  nextcloud-data:
+
+networks:
+  # Gemeinsames bestehendes Projektnetz für MQTT, Monitoring und Nextcloud.
+  m321-sensors:

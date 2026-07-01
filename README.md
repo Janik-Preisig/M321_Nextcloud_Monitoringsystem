@@ -1,4 +1,9 @@
-# Modul 321 - MQTT Smart Home Monitoring
+# Modul 321 - MQTT Smart Home Monitoring mit Nextcloud
+
+Das bestehende MQTT-Projekt enthält zusätzlich einen persistenten Nextcloud-
+Webserver mit MariaDB. Prometheus und Grafana überwachen dabei Nextcloud,
+MariaDB, alle Docker-Container und den Docker-Host. Details, Betrieb und
+Fehlersuche stehen in [docs/nextcloud-monitoring.md](docs/nextcloud-monitoring.md).
 
 ## Personen
 
@@ -91,6 +96,11 @@ Im Projektordner:
 docker compose up -d
 ```
 
+Beim ersten Start werden außerdem Nextcloud, MariaDB und die Monitoring-
+Exporter initialisiert. Die mitgelieferte `.env` ist sofort für eine lokale
+Demo nutzbar. Vor einem produktiven Einsatz müssen alle `change-me-*`-Werte
+ersetzt werden; `.env.example` dokumentiert sämtliche Variablen.
+
 Prüfen:
 
 ```bash
@@ -107,8 +117,11 @@ Der MQTT-Broker stellt diese Ports bereit:
 Grafana ist danach im Browser erreichbar:
 
 ```text
-http://localhost:3000
+http://localhost:3001
 ```
+
+Nextcloud ist unter `http://localhost:8080`, Prometheus unter
+`http://localhost:9090` und cAdvisor unter `http://localhost:18080` erreichbar.
 
 Login:
 

@@ -1,0 +1,38 @@
+{
+  "annotations": {"list": []},
+  "editable": true,
+  "panels": [
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "gridPos": {"h": 6, "w": 6, "x": 0, "y": 0},
+      "id": 1,
+      "options": {"reduceOptions": {"calcs": ["lastNotNull"], "values": false}},
+      "targets": [{"expr": "mysql_up", "refId": "A"}],
+      "title": "MariaDB Status",
+      "type": "stat"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "gridPos": {"h": 8, "w": 9, "x": 6, "y": 0},
+      "id": 2,
+      "targets": [{"expr": "mysql_global_status_threads_connected", "refId": "A"}],
+      "title": "Aktive Verbindungen",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"unit": "ops"}, "overrides": []},
+      "gridPos": {"h": 8, "w": 9, "x": 15, "y": 0},
+      "id": 3,
+      "targets": [{"expr": "rate(mysql_global_status_queries[5m])", "legendFormat": "Queries/s", "refId": "A"}],
+      "title": "Abfragen pro Sekunde",
+      "type": "timeseries"
+    }
+  ],
+  "schemaVersion": 39,
+  "tags": ["mariadb", "database"],
+  "time": {"from": "now-1h", "to": "now"},
+  "title": "MariaDB",
+  "uid": "mariadb-overview",
+  "version": 1
+}

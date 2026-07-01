@@ -1,0 +1,29 @@
+groups:
+  - name: infrastructure
+    rules:
+      - alert: MonitoringTargetDown
+        expr: up{job=~"cadvisor|node-exporter|mariadb"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Monitoring-Ziel {{ $labels.job }} ist nicht erreichbar"
+          description: "Prometheus kann {{ $labels.instance }} seit mindestens einer Minute nicht scrapen."
+
+      - alert: NextcloudUnavailable
+        expr: absent(container_last_seen{name="nextcloud"})
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Nextcloud ist nicht erreichbar"
+          description: "cAdvisor sieht den Nextcloud-Container seit mindestens zwei Minuten nicht."
+
+      - alert: HostDiskAlmostFull
+        expr: (node_filesystem_avail_bytes{fstype!~"tmpfs|overlay"} / node_filesystem_size_bytes{fstype!~"tmpfs|overlay"}) < 0.1
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Wenig freier Speicher auf {{ $labels.mountpoint }}"
+          description: "Auf dem Host sind weniger als 10 Prozent Speicher frei."
