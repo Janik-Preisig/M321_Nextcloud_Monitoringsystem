@@ -2,7 +2,7 @@ services:
   mosquitto:
     image: eclipse-mosquitto:2.0
     container_name: mosquitto
-    restart: unless-stopped
+    restart: "no"
     ports:
       - "1883:1883"
       - "9001:9001"
@@ -16,7 +16,7 @@ services:
   grafana:
     image: grafana/grafana:11.5.2
     container_name: grafana
-    restart: unless-stopped
+    restart: "no"
     ports:
       - "${GRAFANA_PORT:-3001}:3000"
     environment:
@@ -33,7 +33,7 @@ services:
   prometheus:
     image: prom/prometheus:latest
     container_name: prometheus
-    restart: unless-stopped
+    restart: "no"
     ports:
       - "${PROMETHEUS_PORT:-9090}:9090"
     command:
@@ -49,7 +49,7 @@ services:
   alertmanager:
     image: prom/alertmanager:v0.27.0
     container_name: alertmanager
-    restart: unless-stopped
+    restart: "no"
     ports:
       - "${ALERTMANAGER_PORT:-9093}:9093"
     command:
@@ -63,7 +63,7 @@ services:
   cadvisor:
     image: gcr.io/cadvisor/cadvisor:v0.49.1
     container_name: cadvisor
-    restart: unless-stopped
+    restart: "no"
     ports:
       - "${CADVISOR_PORT:-18080}:8080"
     privileged: true
@@ -81,7 +81,7 @@ services:
   node-exporter:
     image: prom/node-exporter:v1.7.0
     container_name: node-exporter
-    restart: unless-stopped
+    restart: "no"
     command:
       - --path.rootfs=/host
       - --collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)
@@ -94,7 +94,7 @@ services:
   mariadb:
     image: mariadb:11.8
     container_name: nextcloud-mariadb
-    restart: unless-stopped
+    restart: "no"
     environment:
       MARIADB_ROOT_PASSWORD: ${MARIADB_ROOT_PASSWORD}
       MARIADB_DATABASE: ${MARIADB_DATABASE}
@@ -119,7 +119,7 @@ services:
   nextcloud:
     image: nextcloud:33-apache
     container_name: nextcloud
-    restart: unless-stopped
+    restart: "no"
     depends_on:
       mariadb:
         condition: service_healthy
@@ -147,7 +147,7 @@ services:
   mariadb-exporter:
     image: prom/mysqld-exporter:v0.17.2
     container_name: mariadb-exporter
-    restart: unless-stopped
+    restart: "no"
     depends_on:
       mariadb:
         condition: service_healthy
